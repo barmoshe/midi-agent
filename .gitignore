@@ -5,3 +5,6 @@ __pycache__/
 .pytest_cache/
 # scratch MIDI captures from manual runs
 *.mid
+
+# macOS
+.DS_Store
