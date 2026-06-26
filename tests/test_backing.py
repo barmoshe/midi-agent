@@ -2,7 +2,10 @@
 and every note_on has a matching note_off (no stuck notes). Pure logic, no ports."""
 from __future__ import annotations
 
-from backing import build_triad, cycle_events, make_context, timeline_for_cycle
+import random
+
+from backing import (PROGRESSIONS, arrange_section, build_triad, cycle_events,
+                     make_context, pick_next_progression, timeline_for_cycle)
 
 
 def test_triads_are_in_key():
@@ -50,3 +53,30 @@ def test_arp_one_chord_tone_per_beat_plus_bass():
     events, _ = cycle_events(ctx, 48, [1], style="arp", bars_per_chord=1)
     # 4 beats -> 4 arp notes + 1 held bass = 5 events for a single chord
     assert len(events) == 5
+
+
+def test_arrange_section_in_key_with_bass_and_humanized():
+    ctx = make_context("C:major")
+    events, sec_beats = arrange_section(ctx, 48, [1, 5, 6, 4], style="pulse",
+                                        rng=random.Random(1), vel=74)
+    assert events and sec_beats == 16
+    for _onset, _dur, pitch, vel in events:
+        assert pitch % 12 in ctx.scale          # everything stays diatonic
+        assert 1 <= vel <= 127
+    assert any(pitch < 48 for _o, _d, pitch, _v in events)   # a walking bass below the chords
+
+
+def test_arrange_section_in_minor_stays_in_key():
+    ctx = make_context("A:minor")
+    events, _ = arrange_section(ctx, 45, [1, 4, 5, 1], style="pads", rng=random.Random(2))
+    for _onset, _dur, pitch, _vel in events:
+        assert pitch % 12 in ctx.scale
+
+
+def test_pick_next_progression_differs_and_is_valid():
+    rng = random.Random(0)
+    cur = [1, 5, 6, 4]
+    for _ in range(12):
+        nxt = pick_next_progression(rng, cur)
+        assert nxt != cur and nxt in PROGRESSIONS
+        cur = nxt

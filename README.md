@@ -5,12 +5,14 @@ A live symbolic-MIDI musician with three modes:
 - **Turn-taking** (`agent.py`): you play a phrase, it detects your turn ended and answers
   with a musically-coherent reply, streamed back into your DAW as editable MIDI. Symbolic
   (MIDI in, MIDI out), not audio. Phrase-level, not sub-20ms jamming.
-- **Backing track** (`backing.py`): a continuous, in-key chord + bass groove you solo over.
-  It only plays (never listens), so there is no input routing and no feedback. See
-  "Backing-track mode" below.
-- **AI backing track** (`ai_backing.py`): the dynamic version - starts with chords, then the
-  local AMT model takes over and keeps generating fresh, evolving material (snapped to your
-  key, capped under your lead). Falls back to the rule-based groove if the model is absent.
+- **Backing track** (`backing.py`): an evolving, in-key accompaniment you solo over - it walks
+  through a bank of chord progressions with 7th-chord color, a walking bass, and accented
+  velocities, so it keeps changing but always sounds like real accompaniment. Music-theory
+  arranger, not a model: reliable, zero latency. It only plays (never listens), so no input
+  routing and no feedback. This is the recommended backing mode. See "Backing-track mode".
+- **AI backing track** (`ai_backing.py`, experimental): the same idea driven by the local AMT
+  model. Honest caveat: a raw symbolic-music model tends to produce aimless backing, so this is
+  rougher than the arranger above - kept for experimentation.
 
 The default is the **M1-M4 proof of concept**: the no-GPU, no-API-key **heuristic** engine
 (music-theory rules: transpose / mirror / arpeggiate / harmonize the human phrase, snapped
@@ -21,7 +23,7 @@ sections 4.4-4.6, `plan.md` M5/M6).
 
 ## Status
 
-- Offline test suite: green (`pytest`, 62 tests, no hardware needed).
+- Offline test suite: green (`pytest`, 65 tests, no hardware needed).
 - Local AMT engine (M5): built and offline-verified (the model boundary is mocked); the real
   model load + a live latency pass are operator-side (see "Smart engine: local AMT").
 - Manual DAW round-trip: pending an operator run on a machine with a real MIDI stack
@@ -55,30 +57,37 @@ Useful flags (`agent.py --help` for all):
 
 ## Backing-track mode (solo over it)
 
-A continuous auto-accompaniment you improvise over. It streams a looping, in-key chord + bass
-groove to "Agent Out" and never listens, so there is nothing to route in and no feedback.
+An evolving auto-accompaniment you improvise over. By default it is **dynamic**: it walks
+through a bank of chord progressions, adds occasional 7th-chord color, plays a walking bass that
+steps toward the next chord, and humanizes velocity, so it keeps changing while always sounding
+musical. It streams to "Agent Out" and never listens, so there is nothing to route in and no
+feedback.
 
 ```bash
-./venv/bin/python backing.py                       # C major, 100 bpm, I-V-vi-IV, "pulse" feel
-./venv/bin/python backing.py --key A:minor --bpm 88 --style pads --progression 1,6,4,5
+./venv/bin/python backing.py                       # C major, 100 bpm, evolving
+./venv/bin/python backing.py --key A:minor --bpm 88 --style pads
+./venv/bin/python backing.py --static --progression 1,6,4,5   # loop one progression instead
 ```
 
-Flags: `--key` (e.g. `C:major`, `A:minor`), `--bpm`, `--style pads|pulse|arp`,
-`--progression` (scale degrees, e.g. `1,5,6,4` = I-V-vi-IV), `--bars-per-chord`,
-`--tonic-octave`, `--chord-vel` / `--bass-vel`.
+Flags: `--key` (e.g. `C:major`, `A:minor`), `--bpm`, `--style pads|pulse|arp`, `--progression`
+(starting / fixed progression in scale degrees, e.g. `1,5,6,4` = I-V-vi-IV), `--static` (loop
+one progression instead of evolving), `--seed` (varies the evolution), `--vel`, `--tonic-octave`.
 
 In your DAW: point one instrument track's MIDI input at **Agent Out** (Monitor In, an
 instrument loaded) to hear the backing, and play your solo on a separate track with your own
 sound. That's the whole setup. Ctrl-C stops it (all notes are released cleanly on exit).
 
-## AI backing track (dynamic, evolving)
+## AI backing track (experimental, neural)
 
-The generative version of the backing track. It plays an instant in-key chord intro while the
-local AMT model warms up, then the model takes over and keeps generating new material, feeding
-its own recent output back in so the groove **evolves instead of looping**. Every note is
-snapped to your key and capped below a register so it stays under your solo; if the model
-isn't installed, or a generation falls behind, it covers the gap with the rule-based
-progression so the music never stops.
+The generative version driven by the local AMT model. It plays an instant in-key chord intro
+while the model warms up, then the model takes over, feeding its own output back so the material
+**evolves**. Every note is snapped to your key and capped below a register; if the model isn't
+installed or falls behind, the rule-based progression covers the gap.
+
+Honest caveat: a raw symbolic-music model has no sense of groove or harmonic function, so even
+snapped to key it tends to sound aimless as a backing track. For a backing you actually want to
+solo over, use the evolving arranger in `backing.py` above. This mode is kept for experimentation
+(and would need constraining - e.g. drums/bass-only roles, beat quantization - to sound tight).
 
 ```bash
 ./venv/bin/pip install -r requirements-model.txt      # once, for the AI version

@@ -5,7 +5,7 @@
 ## Where we are
 
 **M1-M4 PoC + the M5 local AMT engine + a rule-based backing-track mode + a dynamic AI backing
-mode are BUILT and the offline test suite is green** (62 passing `pytest` tests, no hardware).
+mode are BUILT and the offline test suite is green** (65 passing `pytest` tests, no hardware).
 The complete heuristic turn-taking agent ships: two virtual ports, lock-guarded capture with
 dangling-note closeout, the
 three-thread concurrency model, hybrid CC67 + silence-ladder handover, duration-weighted
@@ -30,18 +30,19 @@ public repo (`github.com/barmoshe/midi-agent`).
 
 **Backing-track modes (added 2026-06-26):** for when turn-taking feels stop-start. Both stream
 to Agent Out, never listen (no input routing, no feedback), and you solo over them.
-- `backing.py` (rule-based): a continuous in-key chord + bass groove. Diatonic triads on a
-  configurable progression, pads/pulse/arp feels, drift-free absolute-time looping. Pure logic
-  unit-tested (every note_on has a matching note_off).
-- `ai_backing.py` (dynamic/generative): an instant chord intro, then the AMT model takes over and
-  keeps generating evolving material, feeding its own output back; every note snapped to key and
-  capped under the solo, with the rule-based progression covering any gap. Producer/consumer
-  (a generator thread buffers ahead of the player). Verified live (scripts/ai_backing_smoke.py).
-  Device finding on this Intel Mac (which has a Metal-capable GPU): CPU generates a ~6s chunk in
-  ~3-9s (predictable); MPS is sub-second warm but pays a ~36s first-call Metal compile every run,
-  so ai_backing defaults to `--amt-device cpu` to avoid a 36s startup. Either way the 14s
-  lookahead buffer + rule-based covers keep it from going silent. Pure mapping (place_chunk) +
-  the AmtStream wrapper are unit-tested.
+- `backing.py` (RECOMMENDED, evolving music-theory arranger): walks a bank of chord progressions,
+  adds occasional 7th-chord color, plays a walking bass that steps toward the next chord, and
+  humanizes velocity, so it keeps changing while always sounding like real accompaniment. Zero
+  latency, reliable. `--static` loops one progression; `--seed` varies the evolution. Pure logic
+  (arrange_section / build_triad / timeline_for_cycle) unit-tested.
+- `ai_backing.py` (EXPERIMENTAL, neural): the same idea driven by the AMT model (instant chord
+  intro, then the model evolves it, snapped to key, capped under the solo, with rule-based covers
+  and a producer/consumer lookahead buffer). Honest result from Bar's live test: a raw symbolic
+  -music model has no groove/harmonic-function sense, so it sounds aimless as a backing - the
+  arranger above is what actually sounds good. Kept for experimentation; would need constraining
+  (drums/bass-only roles, beat quantization) to be usable. Device finding (Intel Mac with a Metal
+  GPU): CPU ~3-9s per chunk; MPS sub-second warm but a ~36s first-call Metal compile, so it
+  defaults to `--amt-device cpu`. Pure mapping (place_chunk) + the AmtStream wrapper unit-tested.
 
 ### M5 real-hardware results (2026-06-26, Intel x86_64 Mac, CPU)
 
