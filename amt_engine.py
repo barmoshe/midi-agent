@@ -25,6 +25,10 @@ import mido
 from capture import MIN_DUR_S, NoteRecord
 from responder import Responder, humanize
 
+# Silence the anticipation library's internal tqdm progress bars (they spam the terminal
+# during live playback). Set TQDM_DISABLE=0 in the environment to bring them back.
+os.environ.setdefault("TQDM_DISABLE", "1")
+
 log = logging.getLogger("midi_agent.amt")
 
 # Fixed grid for the temp-.mid bridge. Agent times are absolute seconds; pinning the tempo
