@@ -23,3 +23,17 @@ jobs:
           pip install -r requirements.txt
       - name: Run the offline test suite
         run: python -m pytest -q
+
+  m4l-port:
+    # Guards the Max for Live JS port: engine.js must match the committed golden vectors
+    # (dumped from Python) bit-for-bit, and the device glue must pass its smoke test.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Verify the JS engine matches the Python golden vectors
+        run: node m4l/test/run.js
+      - name: Smoke-test the device glue
+        run: node m4l/test/sim_device.js

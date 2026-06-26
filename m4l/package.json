@@ -1,0 +1,10 @@
+{
+  "name": "midi-follow-m4l",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Max for Live device port of the midi-agent follow-along comp (chords follow your solo)",
+  "scripts": {
+    "test": "node test/run.js && node test/sim_device.js",
+    "golden": "../venv/bin/python test/gen_golden.py"
+  }
+}

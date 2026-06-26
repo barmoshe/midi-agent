@@ -64,6 +64,17 @@ a Node golden-vector oracle (re-encode the follow + theory tests) BEFORE loading
 Runner-up if reuse/correctness matters more: a hybrid M4L shell + Python sidecar (ships
 follow.py verbatim). Full plan, milestones, and "not in the MVP" list in `PLUGIN_MVP.md`.
 
+**MVP build M0 done + Max scaffold (`m4l/`, 2026-06-26):** the riskiest step (the Python->JS
+port) is neutralized. `m4l/engine.js` is a 1:1 port of the harmony core (theory + follow +
+backing primitives); `m4l/test/gen_golden.py` dumps vectors from the real Python and
+`m4l/test/run.js` proves the JS matches **bit-for-bit (3633/3633 vectors**, ints exact, floats
+<=1e-9). `m4l/device.js` is the Max v8 glue (MIDI I/O, transport bar decision, note scheduling,
+echo gate, UI + chord readout), smoke-tested headless by `m4l/test/sim_device.js` (follows a
+solo C->F, panics clean). `m4l/BUILD.md` is the step-by-step Max patch assembly (M1 inline-routing
+gate first, then wiring, then Freeze to a single `MidiFollow.amxd`). CI now has an `m4l-port` job
+(Node) guarding the golden parity + the device sim. Remaining (your machine, per BUILD.md):
+assemble + freeze the `.amxd` in Max and play-test in Ableton.
+
 ### M5 real-hardware results (2026-06-26, Intel x86_64 Mac, CPU)
 
 The AMT engine was run for real (M5.2 + the runnable half of M5.10): deps installed from
