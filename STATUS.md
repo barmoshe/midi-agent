@@ -4,9 +4,9 @@
 
 ## Where we are
 
-**M1-M4 proof of concept + the M5 local AMT engine are BUILT and the offline test suite
-is green** (52 passing `pytest` tests, no hardware). The complete heuristic turn-taking
-agent ships: two virtual ports, lock-guarded capture with dangling-note closeout, the
+**M1-M4 proof of concept + the M5 local AMT engine + a backing-track mode are BUILT and the
+offline test suite is green** (57 passing `pytest` tests, no hardware). The complete heuristic
+turn-taking agent ships: two virtual ports, lock-guarded capture with dangling-note closeout, the
 three-thread concurrency model, hybrid CC67 + silence-ladder handover, duration-weighted
 key/tempo with confidence floors, the `HeuristicResponder` (restate-vary / mirror /
 arpeggiate / harmonize, all snapped in-key) + `humanize()` + `FallbackResponder`, the
@@ -26,6 +26,13 @@ pass (M5.2 / M5.10), and the manual DAW round-trip (this container is headless, 
 
 Relocated 2026-06-26 from the bar_builds monorepo (`lab/midi-agent`) into this standalone
 public repo (`github.com/barmoshe/midi-agent`).
+
+**Backing-track mode (`backing.py`, added 2026-06-26):** a second mode for when turn-taking
+feels stop-start. A continuous, in-key chord + bass groove streamed to Agent Out that you solo
+over; it never listens, so there is no input routing and no feedback. Flags: `--key`, `--bpm`,
+`--style pads|pulse|arp`, `--progression` (scale degrees), etc. Pure music logic (diatonic
+triads + drift-free absolute-time looping) reuses `theory.py` + `ports.py` and is unit-tested
+(every note_on has a matching note_off); the real-time player is the only un-unit-tested part.
 
 ### M5 real-hardware results (2026-06-26, Intel x86_64 Mac, CPU)
 

@@ -1,9 +1,13 @@
 # Live MIDI Agent
 
-A turn-taking, call-and-response AI musician. You play a phrase into a virtual MIDI
-port; the agent detects that your turn ended, generates a musically-coherent reply, and
-streams it back into your DAW as ordinary, editable MIDI. Symbolic (MIDI in, MIDI out),
-not audio. Phrase-level turn-taking, not sub-20ms jamming.
+A live symbolic-MIDI musician with two modes:
+
+- **Turn-taking** (`agent.py`): you play a phrase, it detects your turn ended and answers
+  with a musically-coherent reply, streamed back into your DAW as editable MIDI. Symbolic
+  (MIDI in, MIDI out), not audio. Phrase-level, not sub-20ms jamming.
+- **Backing track** (`backing.py`): a continuous, in-key chord + bass groove you solo over.
+  It only plays (never listens), so there is no input routing and no feedback. See
+  "Backing-track mode" below.
 
 The default is the **M1-M4 proof of concept**: the no-GPU, no-API-key **heuristic** engine
 (music-theory rules: transpose / mirror / arpeggiate / harmonize the human phrase, snapped
@@ -14,7 +18,7 @@ sections 4.4-4.6, `plan.md` M5/M6).
 
 ## Status
 
-- Offline test suite: green (`pytest`, 52 tests, no hardware needed).
+- Offline test suite: green (`pytest`, 57 tests, no hardware needed).
 - Local AMT engine (M5): built and offline-verified (the model boundary is mocked); the real
   model load + a live latency pass are operator-side (see "Smart engine: local AMT").
 - Manual DAW round-trip: pending an operator run on a machine with a real MIDI stack
@@ -45,6 +49,24 @@ Useful flags (`agent.py --help` for all):
 --key "C:major"       # pin the key instead of estimating it
 --no-humanize         # disable the timing/velocity micro-variation
 ```
+
+## Backing-track mode (solo over it)
+
+A continuous auto-accompaniment you improvise over. It streams a looping, in-key chord + bass
+groove to "Agent Out" and never listens, so there is nothing to route in and no feedback.
+
+```bash
+./venv/bin/python backing.py                       # C major, 100 bpm, I-V-vi-IV, "pulse" feel
+./venv/bin/python backing.py --key A:minor --bpm 88 --style pads --progression 1,6,4,5
+```
+
+Flags: `--key` (e.g. `C:major`, `A:minor`), `--bpm`, `--style pads|pulse|arp`,
+`--progression` (scale degrees, e.g. `1,5,6,4` = I-V-vi-IV), `--bars-per-chord`,
+`--tonic-octave`, `--chord-vel` / `--bass-vel`.
+
+In your DAW: point one instrument track's MIDI input at **Agent Out** (Monitor In, an
+instrument loaded) to hear the backing, and play your solo on a separate track with your own
+sound. That's the whole setup. Ctrl-C stops it (all notes are released cleanly on exit).
 
 ## Run the tests
 
