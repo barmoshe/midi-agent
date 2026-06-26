@@ -109,21 +109,42 @@ const $ = (id) => document.getElementById(id);
 function nowS(){ return ac ? ac.currentTime : performance.now()/1000; }
 function midiToFreq(m){ return 440 * Math.pow(2, (m-69)/12); }
 
-// ---- synth ----
+// ---- synth: blended detuned voices -> lowpass (with a gentle sweep) -> ADSR, into the
+// reverb+compressor master chain. Warmer than raw oscillators. ----
+function makeIR(seconds, decay){
+  const rate = ac.sampleRate, len = Math.max(1, Math.floor(rate*seconds));
+  const buf = ac.createBuffer(2, len, rate);
+  for (let ch=0; ch<2; ch++){ const d = buf.getChannelData(ch);
+    for (let i=0;i<len;i++){ d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, decay); } }
+  return buf;
+}
+const VOICES = {
+  lead: { parts:[['triangle',0,1.0],['sine',12,0.16]], cut:2600, q:0.6, atk:0.004, dec:0.10, sus:0.55, rel:0.22, lvl:0.46, backing:false },
+  comp: { parts:[['triangle',0.10,0.45],['triangle',-0.10,0.45],['sine',12,0.18]], cut:1700, q:0.5, atk:0.014, dec:0.18, sus:0.6, rel:0.5, lvl:0.30, backing:true },
+  pad:  { parts:[['triangle',0.08,0.4],['triangle',-0.08,0.4],['sine',7,0.16],['sine',12,0.2]], cut:1250, q:0.4, atk:0.22, dec:0.35, sus:0.82, rel:0.9, lvl:0.26, backing:true },
+  bass: { parts:[['sine',0,1.0],['triangle',0,0.22]], cut:650, q:0.7, atk:0.008, dec:0.16, sus:0.68, rel:0.3, lvl:0.5, backing:true },
+};
 function voice(midi, vel, when, dur, kind){
-  const t = when;
-  const o = ac.createOscillator();
-  const g = ac.createGain();
-  o.type = kind === 'lead' ? 'sawtooth' : (kind === 'bass' ? 'triangle' : 'triangle');
-  o.frequency.value = midiToFreq(midi);
-  const peak = (vel/127) * (kind === 'lead' ? 0.5 : 0.32) * (parseInt($('vol').value)/100 + (kind==='lead'?0.6:0));
-  const rel = kind === 'lead' ? 0.18 : 0.35;
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(Math.max(0.001, peak), t + 0.012);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur + rel);
-  o.connect(g).connect(master);
-  o.start(t);
-  o.stop(t + dur + rel + 0.02);
+  const c = VOICES[kind] || VOICES.comp;
+  const f = midiToFreq(midi), v = vel/127;
+  const lvl = c.lvl * (c.backing ? (parseInt($('vol').value)/100) : 1);
+  const peak = Math.max(0.0006, v * lvl);
+  const filt = ac.createBiquadFilter();
+  filt.type = 'lowpass'; filt.Q.value = c.q;
+  filt.frequency.setValueAtTime(c.cut * 1.6, when);                      // a little brightness on attack
+  filt.frequency.exponentialRampToValueAtTime(Math.max(200, c.cut), when + 0.28);
+  const out = ac.createGain();
+  const g = out.gain;
+  g.setValueAtTime(0.0001, when);
+  g.exponentialRampToValueAtTime(peak, when + c.atk);                    // attack
+  g.exponentialRampToValueAtTime(Math.max(0.0004, peak * c.sus), when + c.atk + c.dec); // decay -> sustain
+  g.setTargetAtTime(0.00008, when + Math.max(c.atk + c.dec, dur), c.rel * 0.4);          // release
+  for (const [type, semi, amt] of c.parts){
+    const o = ac.createOscillator(); o.type = type; o.frequency.value = f * Math.pow(2, semi/12);
+    const og = ac.createGain(); og.gain.value = amt;
+    o.connect(og).connect(filt); o.start(when); o.stop(when + dur + c.rel + 0.25);
+  }
+  filt.connect(out).connect(master);
 }
 
 // ---- input (a played note from keyboard or MIDI) ----
@@ -151,9 +172,10 @@ function onBar(){
   const events = E.chordBarEvents(ctx, tonic, degree, {style:$('feel').value, vel:74, beats, seventh:sevenths,
     rng:{ randint:(a,b)=> a + Math.floor(Math.random()*(b-a+1)) }});
   const spb = 60 / parseInt($('bpm').value);
+  const feelKind = $('feel').value === 'pads' ? 'pad' : 'comp';
   for (const [onset, dur, pitch, vel] of events){
     const isBass = pitch < tonic - 6;
-    voice(pitch, vel, now + onset*spb, Math.max(0.1, dur*spb), isBass ? 'bass' : 'comp');
+    voice(pitch, vel, now + onset*spb, Math.max(0.1, dur*spb), isBass ? 'bass' : feelKind);
   }
   const name = E.chordName(ctx, tonic, degree, sevenths);
   $('chordName').firstChild.nodeValue = name;
@@ -212,7 +234,17 @@ $('startBtn').addEventListener('click', async ()=>{
   if (!running){
     ac = ac || new (window.AudioContext||window.webkitAudioContext)();
     await ac.resume();
-    if (!master){ master = ac.createGain(); master.gain.value = 0.9; master.connect(ac.destination); }
+    if (!master){
+      master = ac.createGain(); master.gain.value = 0.85;
+      const compressor = ac.createDynamicsCompressor();
+      compressor.threshold.value = -16; compressor.ratio.value = 3.0;
+      compressor.attack.value = 0.006; compressor.release.value = 0.25;
+      const conv = ac.createConvolver(); conv.buffer = makeIR(2.6, 2.8);   // a little room/plate
+      const wet = ac.createGain(); wet.gain.value = 0.26;
+      master.connect(compressor);                                          // dry path
+      master.connect(conv); conv.connect(wet); wet.connect(compressor);    // reverb send
+      compressor.connect(ac.destination);
+    }
     running = true; buffer = []; degree = 1;
     $('startBtn').textContent = 'Stop'; $('startBtn').classList.add('stop');
     $('chordSub').textContent = 'listening...';
