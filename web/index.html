@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MIDI Follow - the chords follow your solo</title>
+<style>
+  :root { --bg:#0e1116; --panel:#171c24; --line:#2a313c; --txt:#e7edf5; --mut:#8b97a7; --accent:#5ad1c4; --accent2:#7aa2ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+         background:radial-gradient(1200px 600px at 50% -10%, #1a2330, var(--bg)); color:var(--txt); min-height:100vh; }
+  .wrap { max-width:860px; margin:0 auto; padding:28px 20px 60px; }
+  h1 { font-size:22px; margin:0 0 2px; letter-spacing:.2px; }
+  .sub { color:var(--mut); margin:0 0 22px; font-size:14px; }
+  .chord { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:26px;
+           display:flex; align-items:center; justify-content:space-between; gap:20px; }
+  .chord .name { font-size:64px; font-weight:700; line-height:1; min-width:160px; }
+  .chord .name small { display:block; font-size:13px; color:var(--mut); font-weight:500; margin-top:8px; letter-spacing:.5px; }
+  .keys { display:flex; flex-wrap:wrap; gap:6px; max-width:360px; }
+  .pc { width:30px; height:30px; border-radius:7px; border:1px solid var(--line);
+        display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--mut); background:#11161e; }
+  .pc.in { background:var(--accent2); color:#06121f; border-color:transparent; font-weight:700; }
+  .pc.chord { background:var(--accent); color:#04201c; border-color:transparent; font-weight:700; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-top:18px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px 16px; }
+  .card label { display:block; font-size:12px; color:var(--mut); margin-bottom:8px; text-transform:uppercase; letter-spacing:.6px; }
+  select, input[type=range] { width:100%; }
+  select, button { background:#0f141b; color:var(--txt); border:1px solid var(--line); border-radius:9px; padding:9px 12px; font-size:14px; }
+  button { cursor:pointer; }
+  button.primary { background:linear-gradient(180deg,var(--accent),#39b3a6); color:#04201c; border:0; font-weight:700; }
+  button.primary.stop { background:linear-gradient(180deg,#ff7a7a,#e25555); color:#260909; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:18px; }
+  .toggle { display:flex; gap:8px; align-items:center; }
+  .hint { color:var(--mut); font-size:13px; line-height:1.5; margin-top:18px; }
+  kbd { background:#0f141b; border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; padding:1px 6px; font-size:12px; }
+  .dot { width:9px; height:9px; border-radius:50%; background:#3a4452; display:inline-block; margin-right:6px; }
+  .dot.on { background:var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>MIDI Follow</h1>
+  <p class="sub">Play a solo. The chords follow your harmony, in key, bar by bar. No DAW, no setup.</p>
+
+  <div class="chord">
+    <div class="name" id="chordName">-<small id="chordSub">press Start, then play</small></div>
+    <div class="keys" id="pcRow"></div>
+  </div>
+
+  <div class="row">
+    <button class="primary" id="startBtn">Start</button>
+    <button id="midiBtn">Enable MIDI controller</button>
+    <span id="midiStatus" class="hint" style="margin:0"><span class="dot" id="midiDot"></span>computer keyboard ready</span>
+  </div>
+
+  <div class="grid">
+    <div class="card"><label>Key</label>
+      <select id="key">
+        <option value="auto">Auto-detect</option>
+        <option value="C:major" selected>C major</option>
+        <option value="A:minor">A minor</option>
+        <option value="G:major">G major</option>
+        <option value="D:major">D major</option>
+        <option value="F:major">F major</option>
+        <option value="E:minor">E minor</option>
+        <option value="D:minor">D minor</option>
+      </select>
+    </div>
+    <div class="card"><label>Feel</label>
+      <select id="feel"><option value="pulse" selected>Pulse</option><option value="pads">Pads</option></select>
+    </div>
+    <div class="card"><label>Chord rate</label>
+      <select id="rate"><option value="4" selected>Every bar</option><option value="2">Every 1/2 bar</option></select>
+    </div>
+    <div class="card"><label>7th chords</label>
+      <div class="toggle"><input type="checkbox" id="sevenths"><span class="hint" style="margin:0">jazzier</span></div>
+    </div>
+    <div class="card"><label>Tempo <span id="bpmVal">100</span> BPM</label>
+      <input type="range" id="bpm" min="60" max="160" value="100">
+    </div>
+    <div class="card"><label>Backing volume</label>
+      <input type="range" id="vol" min="0" max="100" value="55">
+    </div>
+  </div>
+
+  <p class="hint">
+    Play with your computer keyboard (musical-typing layout):
+    <kbd>A</kbd><kbd>W</kbd><kbd>S</kbd><kbd>E</kbd><kbd>D</kbd><kbd>F</kbd><kbd>T</kbd><kbd>G</kbd><kbd>Y</kbd><kbd>H</kbd><kbd>U</kbd><kbd>J</kbd><kbd>K</kbd>
+    = C up to C. <kbd>Z</kbd>/<kbd>X</kbd> shift octave. Or click <b>Enable MIDI controller</b> to use a real keyboard.
+    The harmony engine is the same one verified against the Python tests.
+  </p>
+</div>
+
+<script src="engine.js"></script>
+<script>
+const E = window.MidiEngine;
+let ac = null, master = null;
+let running = false;
+let buffer = [];           // [pitch, tSeconds]
+let degree = 1;
+let ctx = E.makeContext('C:major');
+let tonic = 48 + ctx.root;
+let keyMode = 'pin', keyLocked = true;
+let barTimer = null, beatInBar = 0;
+const held = new Set();    // computer-keyboard held notes
+let baseOct = 0;
+
+const $ = (id) => document.getElementById(id);
+function nowS(){ return ac ? ac.currentTime : performance.now()/1000; }
+function midiToFreq(m){ return 440 * Math.pow(2, (m-69)/12); }
+
+// ---- synth ----
+function voice(midi, vel, when, dur, kind){
+  const t = when;
+  const o = ac.createOscillator();
+  const g = ac.createGain();
+  o.type = kind === 'lead' ? 'sawtooth' : (kind === 'bass' ? 'triangle' : 'triangle');
+  o.frequency.value = midiToFreq(midi);
+  const peak = (vel/127) * (kind === 'lead' ? 0.5 : 0.32) * (parseInt($('vol').value)/100 + (kind==='lead'?0.6:0));
+  const rel = kind === 'lead' ? 0.18 : 0.35;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.001, peak), t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur + rel);
+  o.connect(g).connect(master);
+  o.start(t);
+  o.stop(t + dur + rel + 0.02);
+}
+
+// ---- input (a played note from keyboard or MIDI) ----
+function inputNote(pitch, vel){
+  if (!running) return;
+  buffer.push([pitch, nowS()]);
+  voice(pitch, vel || 100, nowS(), 0.35, 'lead');   // hear your own solo
+}
+
+// ---- the per-bar harmony decision + comp ----
+function setKey(spec){ ctx = E.makeContext(spec); tonic = 48 + ctx.root; }
+function recent(now, win){ buffer = buffer.filter(n => now - n[1] <= 8); return buffer.filter(n => now - n[1] <= win); }
+
+function onBar(){
+  const now = nowS();
+  if (keyMode === 'auto' && !keyLocked){
+    const r = recent(now, 6).map(([p,t]) => ({pitch:p, start:t, end:t+0.3}));
+    if (r.length >= 8){ const k = E.estimateKey(r); if (k[2] >= 0.6){ setKey(E.NOTE_NAMES[k[0]]+':'+k[1]); keyLocked = true; } }
+  }
+  const hist = E.pitchHistogram(recent(now, 2.5), now, {windowS:2.5, halflife:1.2});
+  if (Object.keys(hist).length) degree = E.bestDegree(ctx, tonic, hist, degree);
+
+  const beats = parseInt($('rate').value);
+  const sevenths = $('sevenths').checked;
+  const events = E.chordBarEvents(ctx, tonic, degree, {style:$('feel').value, vel:74, beats, seventh:sevenths,
+    rng:{ randint:(a,b)=> a + Math.floor(Math.random()*(b-a+1)) }});
+  const spb = 60 / parseInt($('bpm').value);
+  for (const [onset, dur, pitch, vel] of events){
+    const isBass = pitch < tonic - 6;
+    voice(pitch, vel, now + onset*spb, Math.max(0.1, dur*spb), isBass ? 'bass' : 'comp');
+  }
+  const name = E.chordName(ctx, tonic, degree, sevenths);
+  $('chordName').firstChild.nodeValue = name;
+  $('chordSub').textContent = (keyMode==='auto'? 'auto: ' : '') + rootName();
+  paint(hist, E.buildTriad(ctx, tonic, degree));
+}
+function rootName(){ return E.NOTE_NAMES[ctx.root] + (ctx.mode==='minor'?' minor':' major'); }
+
+// pitch-class strip painting
+const PC = E.NOTE_NAMES;
+function buildPcRow(){ const row=$('pcRow'); row.innerHTML=''; for(let i=0;i<12;i++){ const d=document.createElement('div'); d.className='pc'; d.id='pc'+i; d.textContent=PC[i]; row.appendChild(d);} }
+function paint(hist, triad){
+  const chordPcs = new Set(triad.map(p=>((p%12)+12)%12));
+  for(let i=0;i<12;i++){ const el=$('pc'+i); el.className='pc' + (chordPcs.has(i)?' chord':''); }
+}
+
+// ---- bar clock ----
+function startClock(){
+  stopClock();
+  const barMs = (60 / parseInt($('bpm').value)) * parseInt($('rate').value) * 1000;
+  barTimer = setInterval(onBar, barMs);
+  onBar();
+}
+function stopClock(){ if (barTimer){ clearInterval(barTimer); barTimer = null; } }
+
+// ---- computer keyboard ----
+const KEYMAP = {a:0,w:1,s:2,e:3,d:4,f:5,t:6,g:7,y:8,h:9,u:10,j:11,k:12,o:13,l:14,p:15};
+window.addEventListener('keydown', (ev)=>{
+  if (ev.repeat) return;
+  const k = ev.key.toLowerCase();
+  if (k==='z'){ baseOct=Math.max(-2,baseOct-1); return; }
+  if (k==='x'){ baseOct=Math.min(2,baseOct+1); return; }
+  if (k in KEYMAP && running){ const pitch = 60 + KEYMAP[k] + baseOct*12; if(!held.has(pitch)){ held.add(pitch); inputNote(pitch, 100); } }
+});
+window.addEventListener('keyup', (ev)=>{ const k=ev.key.toLowerCase(); if(k in KEYMAP){ held.delete(60+KEYMAP[k]+baseOct*12); } });
+
+// ---- Web MIDI (optional controller) ----
+$('midiBtn').addEventListener('click', async ()=>{
+  if (!navigator.requestMIDIAccess){ $('midiStatus').textContent='Web MIDI not supported in this browser (use Chrome).'; return; }
+  try{
+    const access = await navigator.requestMIDIAccess();
+    for (const inp of access.inputs.values()){
+      inp.onmidimessage = (m)=>{ const [st,d1,d2]=m.data; if((st&0xf0)===0x90 && d2>0) inputNote(d1, d2); };
+    }
+    $('midiDot').classList.add('on');
+    $('midiStatus').innerHTML = '<span class="dot on"></span>MIDI controller connected';
+  }catch(e){ $('midiStatus').textContent = 'MIDI access denied: '+e.message; }
+});
+
+// ---- controls ----
+$('bpm').addEventListener('input', ()=>{ $('bpmVal').textContent=$('bpm').value; if(running) startClock(); });
+$('key').addEventListener('change', ()=>{ const v=$('key').value; if(v==='auto'){ keyMode='auto'; keyLocked=false; } else { keyMode='pin'; keyLocked=true; setKey(v); } });
+$('rate').addEventListener('change', ()=>{ if(running) startClock(); });
+
+$('startBtn').addEventListener('click', async ()=>{
+  if (!running){
+    ac = ac || new (window.AudioContext||window.webkitAudioContext)();
+    await ac.resume();
+    if (!master){ master = ac.createGain(); master.gain.value = 0.9; master.connect(ac.destination); }
+    running = true; buffer = []; degree = 1;
+    $('startBtn').textContent = 'Stop'; $('startBtn').classList.add('stop');
+    $('chordSub').textContent = 'listening...';
+    startClock();
+  } else {
+    running = false; stopClock();
+    $('startBtn').textContent = 'Start'; $('startBtn').classList.remove('stop');
+    $('chordName').firstChild.nodeValue = '-'; $('chordSub').textContent = 'stopped';
+  }
+});
+
+buildPcRow();
+</script>
+</body>
+</html>
