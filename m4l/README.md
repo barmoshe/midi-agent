@@ -11,6 +11,7 @@ virtual ports, no routing, no feedback trap. This is the MVP chosen in
 |---|---|
 | `engine.js` | The harmony engine, ported 1:1 from the Python PoC (`theory.py` + `follow.py` + `backing.py` primitives). Pure JS, runs in Node and Max v8. |
 | `device.js` | The Max v8 object: MIDI I/O, the transport-driven bar decision, note scheduling, the echo gate, UI params + chord readout. Glue over `engine.js`. |
+| `MidiFollow.maxpat` | A complete, prebuilt, wired Max device patch - paste it into the Max editor instead of placing objects by hand (see BUILD.md "Fast path"). |
 | `test/gen_golden.py` | Dumps golden vectors from the real Python functions. |
 | `test/golden.json` | The committed vectors (3633 of them). |
 | `test/run.js` | The Node oracle: proves `engine.js` matches Python bit-for-bit. |

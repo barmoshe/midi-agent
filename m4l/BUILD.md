@@ -18,6 +18,26 @@ fact the whole plan rests on.
   add this `m4l/` folder to the search path**. (Later, "Freeze Device" embeds both files into the
   `.amxd`, so the search-path step is only needed during development.)
 
+## Fast path - paste the prebuilt device (recommended)
+
+A complete wired patch ships as `MidiFollow.maxpat`. Instead of placing objects by hand (Steps
+1-4), paste it:
+
+1. Copy it to the clipboard:  `pbcopy < ~/midi-agent/m4l/MidiFollow.maxpat`
+2. In Live, drop a **Max MIDI Effect** on a MIDI track and click **Edit** to open the Max editor.
+3. In Max: **Edit -> Select All** then **Delete** (clear the default `midiin -> midiout`), then
+   **Edit -> Paste** (Cmd-V). The whole device appears wired: `midiin -> midiparse -> prepend note
+   -> v8 device.js -> midiformat -> midiout`, a `toggle -> metro 1n` bar clock, control message
+   boxes (key / feel / 7ths / tempo / panic), and `print chord` for the readout.
+4. Put an instrument after the device on the track. Click the **toggle** on (and/or press Live
+   play). Play a solo - the chords follow you, and the Max window prints the chord it is playing.
+5. **Freeze** (snowflake) and Save As `MidiFollow.amxd` to your User Library.
+
+If the chord never changes, open the Max window (the console): if you see no `chord ...` prints,
+the note input is not reaching the v8 (re-check the `midiparse` -> `prepend note` wire); if you see
+prints but hear nothing, re-check `midiformat -> midiout` and that an instrument is after the
+device. The manual steps below explain each piece.
+
 ## Step 1 - create the device
 
 In Ableton, on a **MIDI track**, open the **Max for Live** category in the browser and drag **"Max
