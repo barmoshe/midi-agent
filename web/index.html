@@ -81,6 +81,12 @@
     <div class="card"><label>Backing volume</label>
       <input type="range" id="vol" min="0" max="100" value="55">
     </div>
+    <div class="card"><label>Drive (grit) <span id="driveVal">45</span></label>
+      <input type="range" id="drive" min="0" max="100" value="45">
+    </div>
+    <div class="card"><label>Pad overlay</label>
+      <div class="toggle"><input type="checkbox" id="pad" checked><span class="hint" style="margin:0">smooth bed under the grit</span></div>
+    </div>
   </div>
 
   <p class="hint">
@@ -94,7 +100,7 @@
 <script src="engine.js"></script>
 <script>
 const E = window.MidiEngine;
-let ac = null, master = null;
+let ac = null, master = null, distBus = null;
 let running = false;
 let buffer = [];           // [pitch, tSeconds]
 let degree = 1;
@@ -118,11 +124,19 @@ function makeIR(seconds, decay){
     for (let i=0;i<len;i++){ d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, decay); } }
   return buf;
 }
+function makeDistortionCurve(amount){
+  const k = amount, n = 1024, curve = new Float32Array(n), deg = Math.PI/180;
+  for (let i=0;i<n;i++){ const x = i*2/n - 1; curve[i] = (3+k)*x*20*deg / (Math.PI + k*Math.abs(x)); }
+  return curve;
+}
+function driveAmount(){ return 4 + parseInt($('drive').value) * 0.9; }   // ~4..94
+// Backing voices are harsh saws/squares routed through the shared distortion bus; the lead
+// stays clean, and a smooth sine/triangle PAD overlays under the grit (added in onBar).
 const VOICES = {
-  lead: { parts:[['triangle',0,1.0],['sine',12,0.16]], cut:2600, q:0.6, atk:0.004, dec:0.10, sus:0.55, rel:0.22, lvl:0.46, backing:false },
-  comp: { parts:[['triangle',0.10,0.45],['triangle',-0.10,0.45],['sine',12,0.18]], cut:1700, q:0.5, atk:0.014, dec:0.18, sus:0.6, rel:0.5, lvl:0.30, backing:true },
-  pad:  { parts:[['triangle',0.08,0.4],['triangle',-0.08,0.4],['sine',7,0.16],['sine',12,0.2]], cut:1250, q:0.4, atk:0.22, dec:0.35, sus:0.82, rel:0.9, lvl:0.26, backing:true },
-  bass: { parts:[['sine',0,1.0],['triangle',0,0.22]], cut:650, q:0.7, atk:0.008, dec:0.16, sus:0.68, rel:0.3, lvl:0.5, backing:true },
+  lead: { parts:[['triangle',0,1.0],['sine',12,0.16]], cut:2600, q:0.6, atk:0.004, dec:0.10, sus:0.55, rel:0.22, lvl:0.42, backing:false, dist:false },
+  comp: { parts:[['sawtooth',0.14,0.5],['sawtooth',-0.14,0.5],['square',12,0.16]], cut:3600, q:0.9, atk:0.005, dec:0.13, sus:0.5, rel:0.4, lvl:0.22, backing:true, dist:true },
+  pad:  { parts:[['triangle',0.06,0.5],['sine',7,0.18],['sine',12,0.22],['triangle',-0.06,0.5]], cut:1050, q:0.4, atk:0.32, dec:0.4, sus:0.85, rel:1.2, lvl:0.20, backing:true, dist:false },
+  bass: { parts:[['sawtooth',0,0.8],['square',0,0.4]], cut:950, q:0.9, atk:0.006, dec:0.14, sus:0.7, rel:0.28, lvl:0.5, backing:true, dist:true },
 };
 function voice(midi, vel, when, dur, kind){
   const c = VOICES[kind] || VOICES.comp;
@@ -131,8 +145,8 @@ function voice(midi, vel, when, dur, kind){
   const peak = Math.max(0.0006, v * lvl);
   const filt = ac.createBiquadFilter();
   filt.type = 'lowpass'; filt.Q.value = c.q;
-  filt.frequency.setValueAtTime(c.cut * 1.6, when);                      // a little brightness on attack
-  filt.frequency.exponentialRampToValueAtTime(Math.max(200, c.cut), when + 0.28);
+  filt.frequency.setValueAtTime(c.cut * 1.7, when);                      // bite on the attack
+  filt.frequency.exponentialRampToValueAtTime(Math.max(220, c.cut), when + 0.3);
   const out = ac.createGain();
   const g = out.gain;
   g.setValueAtTime(0.0001, when);
@@ -144,7 +158,7 @@ function voice(midi, vel, when, dur, kind){
     const og = ac.createGain(); og.gain.value = amt;
     o.connect(og).connect(filt); o.start(when); o.stop(when + dur + c.rel + 0.25);
   }
-  filt.connect(out).connect(master);
+  filt.connect(out).connect(c.dist && distBus ? distBus : master);       // grit bus or clean
 }
 
 // ---- input (a played note from keyboard or MIDI) ----
@@ -172,10 +186,15 @@ function onBar(){
   const events = E.chordBarEvents(ctx, tonic, degree, {style:$('feel').value, vel:74, beats, seventh:sevenths,
     rng:{ randint:(a,b)=> a + Math.floor(Math.random()*(b-a+1)) }});
   const spb = 60 / parseInt($('bpm').value);
+  const beatsPerBar = beats;
   const feelKind = $('feel').value === 'pads' ? 'pad' : 'comp';
   for (const [onset, dur, pitch, vel] of events){
     const isBass = pitch < tonic - 6;
     voice(pitch, vel, now + onset*spb, Math.max(0.1, dur*spb), isBass ? 'bass' : feelKind);
+  }
+  // smooth PAD overlay: hold the chord triad under the gritty comp for the whole bar
+  if ($('pad').checked){
+    for (const p of E.buildTriad(ctx, tonic, degree)) voice(p, 52, now, beatsPerBar*spb, 'pad');
   }
   const name = E.chordName(ctx, tonic, degree, sevenths);
   $('chordName').firstChild.nodeValue = name;
@@ -229,6 +248,7 @@ $('midiBtn').addEventListener('click', async ()=>{
 $('bpm').addEventListener('input', ()=>{ $('bpmVal').textContent=$('bpm').value; if(running) startClock(); });
 $('key').addEventListener('change', ()=>{ const v=$('key').value; if(v==='auto'){ keyMode='auto'; keyLocked=false; } else { keyMode='pin'; keyLocked=true; setKey(v); } });
 $('rate').addEventListener('change', ()=>{ if(running) startClock(); });
+$('drive').addEventListener('input', ()=>{ $('driveVal').textContent=$('drive').value; if(distBus) distBus.curve = makeDistortionCurve(driveAmount()); });
 
 $('startBtn').addEventListener('click', async ()=>{
   if (!running){
@@ -241,6 +261,11 @@ $('startBtn').addEventListener('click', async ()=>{
       compressor.attack.value = 0.006; compressor.release.value = 0.25;
       const conv = ac.createConvolver(); conv.buffer = makeIR(2.6, 2.8);   // a little room/plate
       const wet = ac.createGain(); wet.gain.value = 0.26;
+      // distortion bus for the harsh backing voices: waveshaper -> tame gain -> high cut -> master
+      distBus = ac.createWaveShaper(); distBus.curve = makeDistortionCurve(driveAmount()); distBus.oversample = '4x';
+      const distGain = ac.createGain(); distGain.gain.value = 0.6;
+      const distLP = ac.createBiquadFilter(); distLP.type = 'lowpass'; distLP.frequency.value = 6500;
+      distBus.connect(distGain); distGain.connect(distLP); distLP.connect(master);
       master.connect(compressor);                                          // dry path
       master.connect(conv); conv.connect(wet); wet.connect(compressor);    // reverb send
       compressor.connect(ac.destination);
