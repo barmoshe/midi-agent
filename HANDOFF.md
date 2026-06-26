@@ -44,10 +44,10 @@ Flat layout, single process, no framework:
 ## Run it locally
 
 ```bash
-cd lab/midi-agent
+cd midi-agent
 python3 -m venv venv                       # venv is gitignored; recreate it
 ./venv/bin/pip install -r requirements.txt
-./venv/bin/python -m pytest                # expect: 39 passed
+./venv/bin/python -m pytest                # expect: 52 passed
 ./venv/bin/python agent.py                 # opens the two virtual ports, starts listening
 ```
 
@@ -72,22 +72,28 @@ the DAW. Tune `--silence-ms` for feel (the single most interaction-defining knob
 
 ## NEXT MILESTONES (in order)
 
-### M5 - Local AMT engine (recommended next, no API key)
+### M5 - Local AMT engine (BUILT offline; operator hardware pass remains)
 
-The "smart" upgrade the operator actually wants: free, offline, MIDI-native. See
-`design.md` 4.4 and `plan.md` M5 tasks. Shape:
+The "smart" upgrade the operator actually wants: free, offline, MIDI-native. The
+offline-testable bulk is **built and green** (`amt_engine.py` + `tests/test_amt_bridge.py`,
+`tests/test_amt_responder.py`, `tests/test_fallback.py`). What was built:
 
-- New `amt_engine.py` with `AmtResponder(Responder)`; `requirements-model.txt` already
-  lists `transformers`/`torch`/`anticipation` (NOT installed by default).
-- `build_responder` in `responder.py` already routes `--responder amt` to it behind a
-  `FallbackResponder` (so a missing torch / failed load drops to the heuristic). The import
-  is guarded - keep it that way.
-- Pipeline: snapshot phrase -> temp `.mid` -> `anticipation.convert.midi_to_events` ->
-  `generate(...)` -> `events_to_midi` -> back to `NoteRecord` list (offsets from 0). Apply
-  the same `theory.snap` + `humanize` post-pass. Confirm the HuggingFace **weights** license
-  before any paid use (believed Apache-2.0; see research caveat).
-- AMT accompaniment is co-temporal; adapt it to sequential turn-taking (reply after the
-  phrase). Measure real per-turn latency and record it.
+- `amt_engine.py`: the model-free NoteRecord <-> temp `.mid` bridge, the guarded-import
+  `AmtResponder` (the module always imports; constructing it without torch raises a catchable
+  ImportError), the section-4.4 round-trip (phrase -> `midi_to_events` -> `generate(start_time
+  =t_end..)` -> `events_to_midi` -> notes), the call-and-response window filter + t=0 re-base,
+  and the shared scale-snap + `humanize` post-pass. The model boundary (`_encode`/`_generate`/
+  `_decode`) is the injectable test seam.
+- `responder.py`: `build_responder` routes `--responder amt` behind a `FallbackResponder` with
+  a best-effort `--amt-timeout`; missing deps / load failure / timeout drop to the heuristic.
+- `config.py`: `--amt-model`, `--amt-device`, `--amt-response-bars`, `--amt-top-p`,
+  `--amt-timeout`, `--amt-no-snap`. Default `--responder` stays `heuristic`.
+
+**What remains is operator/hardware-side (M5.2 + M5.10):** `pip install -r
+requirements-model.txt`, run `--responder amt` against a DAW, confirm a model-composed in-key
+reply records and loops, observe one real CPU `generate()` latency and the loop behavior
+during it, and confirm the HuggingFace **weights** license before any paid use (the AMT code
+is Apache-2.0; weights believed Apache-2.0, confirm). Keep responses ~2 bars on CPU.
 
 ### M6 - Claude API engine (optional, needs a metered key)
 
@@ -132,14 +138,16 @@ hardware-free.
   keep both out of commit messages.
 - **House style: no em dashes** in committed files (use commas, parens, hyphens).
 - **`venv/` is gitignored** - recreate it; never commit it.
-- This is a sub-project: full autonomy inside `lab/midi-agent/`. Touching the repo root,
-  `.github/`, or `decisions/` at root is business-scope - confirm with the operator.
+- This is now its **own standalone repo** (`github.com/barmoshe/midi-agent`), relocated from
+  the bar_builds monorepo on 2026-06-26. Full autonomy here; `.github/` CI is this repo's own
+  scope now (no longer monorepo business-scope).
 
 ## Git flow
 
-Work on branch `claude/midi-innovation-research-wuayie`; the session has been mirroring to
-`main` after each push (`git push origin HEAD:main`, a fast-forward, never a force push).
-Commit in milestone-sized chunks. Keep `pytest` green. Update `STATUS.md` as you go.
+This is a standalone repo with `origin` = `github.com/barmoshe/midi-agent`, default branch
+`main`. Work on a feature branch, keep `pytest` green, commit in milestone-sized chunks, open
+a PR (CI runs `pytest` on push/PR). Update `STATUS.md` as you go. Two commit-message gotchas
+still apply (see above): no em dashes, and keep the word "contract" + a `>` out of messages.
 
 ## Definition of done for the PoC (from scope.md)
 
@@ -147,7 +155,7 @@ Commit in milestone-sized chunks. Keep `pytest` green. Update `STATUS.md` as you
       confirm in a DAW**).
 - [ ] Play a phrase -> in-key reply recorded as editable MIDI (**needs the DAW run**).
 - [ ] Turn-taking loops without restart (**needs the DAW run**).
-- [x] Runs with no GPU (heuristic path).
+- [x] Runs with no GPU (heuristic path; the optional M5 AMT engine is the smart upgrade).
 - [x] README documents per-OS setup incl. the Windows loopMIDI caveat.
 
 The code and offline proof are done; the three unchecked boxes need a real DAW, which is

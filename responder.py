@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import random
+import threading
 from abc import ABC, abstractmethod
 
 from capture import MIN_DUR_S, NoteRecord
@@ -131,18 +132,43 @@ class HeuristicResponder(Responder):
 
 
 class FallbackResponder(Responder):
-    """Wrap any engine; on ImportError/exception, drop to the always-importable heuristic."""
+    """Wrap any engine; on ImportError/exception/timeout, drop to the always-importable
+    heuristic. An optional timeout_s runs the primary in a daemon thread and abandons it if
+    it overruns, so the live loop returns the heuristic answer instead of blocking on a slow
+    generate. Best-effort by design (M5.7): the orphaned thread keeps running to completion
+    (Python cannot hard-kill it); a truly enforceable kill would need process isolation."""
 
-    def __init__(self, primary: Responder, fallback: Responder) -> None:
+    def __init__(self, primary: Responder, fallback: Responder, timeout_s: float | None = None) -> None:
         self.primary = primary
         self.fallback = fallback
+        self.timeout_s = timeout_s
 
     def respond(self, phrase: tuple, context) -> tuple:
         try:
+            if self.timeout_s and self.timeout_s > 0:
+                return self._run_with_timeout(phrase, context)
             return self.primary.respond(phrase, context)
         except Exception as exc:  # noqa: BLE001 - any engine failure must keep the music going
             log.warning("primary responder failed (%s); using heuristic fallback", exc)
             return self.fallback.respond(phrase, context)
+
+    def _run_with_timeout(self, phrase: tuple, context) -> tuple:
+        box: dict = {}
+
+        def _run() -> None:
+            try:
+                box["ok"] = self.primary.respond(phrase, context)
+            except Exception as exc:  # noqa: BLE001 - surfaced to respond() for the fallback
+                box["err"] = exc
+
+        th = threading.Thread(target=_run, daemon=True)
+        th.start()
+        th.join(self.timeout_s)
+        if th.is_alive():
+            raise TimeoutError(f"primary responder exceeded {self.timeout_s}s")
+        if "err" in box:
+            raise box["err"]
+        return box.get("ok", ())
 
 
 def build_responder(config) -> Responder:
@@ -151,9 +177,14 @@ def build_responder(config) -> Responder:
     heuristic = HeuristicResponder(config)
     if config.responder == "heuristic":
         return heuristic
-    if config.responder == "amt":  # pragma: no cover - M5, optional local model
-        from amt_engine import AmtResponder  # noqa: F401 - not built this milestone
-        return FallbackResponder(AmtResponder(config), heuristic)
+    if config.responder == "amt":  # M5, optional local model
+        try:
+            from amt_engine import AmtResponder
+            primary = AmtResponder(config)
+        except Exception as exc:  # noqa: BLE001 - missing deps / model load -> heuristic
+            log.warning("AMT engine unavailable (%s); using heuristic", exc)
+            return heuristic
+        return FallbackResponder(primary, heuristic, timeout_s=config.amt_timeout)
     if config.responder == "claude":  # pragma: no cover - M6, optional API engine
         from claude_engine import ClaudeResponder  # noqa: F401 - not built this milestone
         return FallbackResponder(ClaudeResponder(config), heuristic)

@@ -5,14 +5,18 @@ port; the agent detects that your turn ended, generates a musically-coherent rep
 streams it back into your DAW as ordinary, editable MIDI. Symbolic (MIDI in, MIDI out),
 not audio. Phrase-level turn-taking, not sub-20ms jamming.
 
-This is the **M1-M4 proof of concept**: the no-GPU, no-API-key **heuristic** engine
+The default is the **M1-M4 proof of concept**: the no-GPU, no-API-key **heuristic** engine
 (music-theory rules: transpose / mirror / arpeggiate / harmonize the human phrase, snapped
-to the detected key). The smart engines (local AMT, Claude API) are designed but not built
-yet (see `design.md` sections 4.4-4.6, `plan.md` M5/M6).
+to the detected key). An optional **local AMT engine** (M5, `--responder amt`) swaps in a
+pretrained symbolic-music transformer for smarter replies; it degrades to the heuristic when
+its deps are absent. The Claude API engine (M6) is designed but not built (see `design.md`
+sections 4.4-4.6, `plan.md` M5/M6).
 
 ## Status
 
-- Offline test suite: green (`pytest`, 39 tests, no hardware needed).
+- Offline test suite: green (`pytest`, 52 tests, no hardware needed).
+- Local AMT engine (M5): built and offline-verified (the model boundary is mocked); the real
+  model load + a live latency pass are operator-side (see "Smart engine: local AMT").
 - Manual DAW round-trip: pending an operator run on a machine with a real MIDI stack
   (this was built in a headless container with no `/dev/snd/seq`). See "Verify in a DAW".
 
@@ -25,7 +29,7 @@ yet (see `design.md` sections 4.4-4.6, `plan.md` M5/M6).
 ## Install and run
 
 ```bash
-cd lab/midi-agent
+cd midi-agent
 python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
 ./venv/bin/python agent.py            # opens "Agent In" + "Agent Out", starts listening
@@ -50,7 +54,35 @@ Useful flags (`agent.py --help` for all):
 
 The entire capture -> handover -> theory -> responder -> scheduler path is testable with no
 real ports and no real sleeps (an injectable clock drives the timers), so you can iterate
-without a DAW.
+without a DAW. The AMT engine's model boundary is mocked in `tests/test_amt_responder.py`,
+so the full M5 path is covered with no torch installed.
+
+## Smart engine: local AMT (M5, optional, no API key)
+
+The optional `--responder amt` engine answers with a pretrained **Anticipatory Music
+Transformer** (`stanford-crfm/music-medium-800k`) instead of the heuristic rules. It is
+free, offline, and MIDI-native. The model deps are heavy and **not installed by default**:
+
+```bash
+./venv/bin/pip install -r requirements-model.txt     # transformers, torch, anticipation
+./venv/bin/python agent.py --responder amt
+```
+
+- **First run downloads the checkpoint** (~hundreds of MB) into the HuggingFace cache.
+- **Device** is auto-selected (`--amt-device auto` -> cuda > mps > cpu); override with
+  `--amt-device cpu|cuda|mps`.
+- **Latency:** a few-bar reply is well under 1s on GPU / Apple Silicon, ~1-3s on a strong
+  laptop CPU. Keep responses short on CPU (`--amt-response-bars 2`, the default).
+- **Other flags:** `--amt-model`, `--amt-top-p` (0.98), `--amt-timeout` (seconds),
+  `--amt-no-snap` (skip the in-key scale-snap of model output).
+- **Graceful fallback:** if the deps are missing, the model fails to load, or a generate
+  overruns `--amt-timeout`, the agent logs a warning and answers with the heuristic instead,
+  so the music never stops.
+- **Timeout is best-effort:** on overrun the agent returns the heuristic reply rather than
+  blocking, but the abandoned generation finishes in the background (Python cannot hard-kill
+  it). A truly enforceable kill would need process isolation; documented, not implemented.
+- **License caveat:** the AMT *code* is Apache-2.0, but confirm the *weights* license on
+  HuggingFace before any paid/commercial use. Fine for personal/offline use and lab demos.
 
 ## Per-OS virtual MIDI ports
 
@@ -86,8 +118,9 @@ port reopens cleanly. Record what you see here if it differs from a clean restar
 
 Flat, single process, no framework. `agent.py` (state machine + CLI + cleanup), `ports.py`
 (the only RtMidi module), `capture.py` (NoteRecord + PhraseBuffer), `handover.py`,
-`theory.py`, `responder.py`, `scheduler.py`, `config.py`, `tests/`. Design and rationale:
-`design.md`. Build plan: `plan.md`.
+`theory.py`, `responder.py` (the engine seam), `amt_engine.py` (the optional M5 local model,
+guarded imports), `scheduler.py`, `config.py`, `tests/`. Design and rationale: `design.md`.
+Build plan: `plan.md`.
 
 ## Resolved core versions
 

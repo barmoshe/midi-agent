@@ -24,6 +24,14 @@ class Config:
     seed: int = 0                 # deterministic humanize/choice
     humanize: bool = True
 
+    # --- AMT engine (M5, optional local model; deps in requirements-model.txt) ---
+    amt_model: str = "stanford-crfm/music-medium-800k"
+    amt_device: str = "auto"      # auto | cpu | cuda | mps
+    amt_response_bars: int = 2    # response-length cap (keep ~2 on CPU for latency)
+    amt_top_p: float = 0.98       # nucleus sampling
+    amt_timeout: float = 10.0     # best-effort: abandon a slow generate, answer via heuristic
+    amt_snap: bool = True         # scale-snap model output to the detected key
+
     # --- musical coherence (M3) ---
     key_lock: str | None = None   # e.g. "C:major" to pin the key; None = estimate
     key_floor: float = 0.5        # below this key-confidence, fall back to last-known/lock
@@ -48,6 +56,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--response-bars", type=int, default=d.response_bars)
     p.add_argument("--seed", type=int, default=d.seed)
     p.add_argument("--no-humanize", dest="humanize", action="store_false", help="disable timing/velocity humanize")
+    p.add_argument("--amt-model", default=d.amt_model, help="HuggingFace AMT checkpoint (M5)")
+    p.add_argument("--amt-device", default=d.amt_device, choices=["auto", "cpu", "cuda", "mps"], help="AMT inference device")
+    p.add_argument("--amt-response-bars", type=int, default=d.amt_response_bars, help="AMT response length cap in bars")
+    p.add_argument("--amt-top-p", type=float, default=d.amt_top_p, help="AMT nucleus sampling top_p")
+    p.add_argument("--amt-timeout", type=float, default=d.amt_timeout,
+                   help="best-effort AMT generate timeout (s) before heuristic fallback")
+    p.add_argument("--amt-no-snap", dest="amt_snap", action="store_false",
+                   help="do not scale-snap AMT output to the detected key")
     p.add_argument("--key", dest="key_lock", default=d.key_lock, help='pin the key, e.g. "C:major" or "A:minor"')
     p.add_argument("--port-in-name", default=d.port_in_name)
     p.add_argument("--port-out-name", default=d.port_out_name)
@@ -61,5 +77,7 @@ def parse_args(argv=None) -> Config:
         trigger_cc=a.trigger_cc, silence_ms=a.silence_ms, hard_ms=a.hard_ms, poll_ms=a.poll_ms,
         responder=a.responder, heuristic_mode=a.heuristic_mode, response_bars=a.response_bars,
         seed=a.seed, humanize=a.humanize, key_lock=a.key_lock,
+        amt_model=a.amt_model, amt_device=a.amt_device, amt_response_bars=a.amt_response_bars,
+        amt_top_p=a.amt_top_p, amt_timeout=a.amt_timeout, amt_snap=a.amt_snap,
         port_in_name=a.port_in_name, port_out_name=a.port_out_name, echo_window_ms=a.echo_window_ms,
     )

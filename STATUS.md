@@ -4,15 +4,28 @@
 
 ## Where we are
 
-**M1-M4 proof of concept BUILT and the offline test suite is green** (39 passing
-`pytest` tests, no hardware). The complete heuristic turn-taking agent ships: two
-virtual ports, lock-guarded capture with dangling-note closeout, the three-thread
-concurrency model, hybrid CC67 + silence-ladder handover, duration-weighted key/tempo
-with confidence floors, the `HeuristicResponder` (restate-vary / mirror / arpeggiate /
-harmonize, all snapped in-key) + `humanize()` + `FallbackResponder`, the absolute-target
-scheduler with echo-guard, and guaranteed panic/all-notes-off cleanup. Code + tests +
-per-OS README all in this folder. The one thing not done here: the manual DAW round-trip
-(this container is headless, no `/dev/snd/seq`), which is the operator's to run.
+**M1-M4 proof of concept + the M5 local AMT engine are BUILT and the offline test suite
+is green** (52 passing `pytest` tests, no hardware). The complete heuristic turn-taking
+agent ships: two virtual ports, lock-guarded capture with dangling-note closeout, the
+three-thread concurrency model, hybrid CC67 + silence-ladder handover, duration-weighted
+key/tempo with confidence floors, the `HeuristicResponder` (restate-vary / mirror /
+arpeggiate / harmonize, all snapped in-key) + `humanize()` + `FallbackResponder`, the
+absolute-target scheduler with echo-guard, and guaranteed panic/all-notes-off cleanup.
+
+**M5 (local AMT engine)** is built behind the existing `Responder` seam: `amt_engine.py`
+with the model-free NoteRecord <-> temp `.mid` bridge, the guarded-import `AmtResponder`
+(constructing it without torch raises a catchable ImportError; the module always imports),
+the call-and-response round-trip (continue after the phrase, re-base to t=0), the shared
+scale-snap + `humanize` post-pass, and a best-effort `--amt-timeout` in `FallbackResponder`.
+`--responder amt` wired through `config.py` with `--amt-*` tunables; the default stays the
+heuristic. The model boundary is mocked in `tests/test_amt_responder.py`, so the full path is
+verified with **zero** torch / transformers / anticipation installed (which also proves the
+graceful fallback). Two things are operator-side: the real model load + a live CPU-latency
+pass (M5.2 / M5.10), and the manual DAW round-trip (this container is headless, no
+`/dev/snd/seq`).
+
+Relocated 2026-06-26 from the bar_builds monorepo (`lab/midi-agent`) into this standalone
+public repo (`github.com/barmoshe/midi-agent`).
 
 Research, feasibility, AND technical design also complete (including the
 Claude-as-engine direction).
@@ -43,8 +56,6 @@ three-thread concurrency model (callback / poll / state+scheduler, no asyncio); 
 product** and **AMT** (`stanford-crfm/music-medium-800k`) as the stretch model swap;
 hybrid CC67-pedal + silence-ladder handover; echo-guard + panic cleanup safety.
 
-Nothing built yet - stopped before the build by operator request.
-
 ## Next action
 
 **Operator: run the manual DAW round-trip** (the acceptance gates that need real ports;
@@ -52,13 +63,18 @@ see README "Verify in a DAW"). Start `python agent.py`, confirm Agent In/Out app
 DAW, play a phrase, confirm an in-key reply records as editable MIDI, and that turn-taking
 loops. Report back and we close G1/G3/G4.
 
-Then the next build increment is **M5 = local AMT engine** (the recommended no-key smart
-engine, the "AI duet partner" headline) behind the existing `Responder` seam. M6 (Claude
-API, needs a key) is the optional best-quality upgrade.
+**Operator: exercise the M5 AMT engine on real hardware** (M5.2 + M5.10): `pip install -r
+requirements-model.txt`, run `--responder amt`, confirm a model-composed in-key reply records
+as editable MIDI and loops; observe one real CPU `generate()`'s wall-clock latency and the
+loop behavior during it (best-effort timeout posture: the loop returns the heuristic at
+`--amt-timeout`; the abandoned generation finishes in the background). Record the observed
+latency here. Confirm the AMT *weights* license on HuggingFace before any paid build.
 
-Deferred follow-up: GitHub Actions CI was planned (X6) but a repo-root `.github/` workflow
-is business-scope in this monorepo, so it is left for operator confirmation; for now the
-gate is the local `pytest` run (green).
+The remaining build increment is **M6 = Claude API engine** (needs a metered key), the
+optional best-quality upgrade behind the same `Responder` seam.
+
+CI: a GitHub Actions workflow (`.github/workflows/ci.yml`) runs `pytest` on the core deps on
+push/PR (this is now its own repo, so CI is no longer monorepo business-scope).
 
 ## Blockers
 
