@@ -53,6 +53,17 @@ bar by bar. Key is pinned (`--key`) or auto-detected (Krumhansl, locked once con
 reactive "AI" the operator wanted (analysis-driven harmony, not a hallucinating model). Pure
 logic (pitch_histogram / score_chord / best_degree / chord_bar_events) unit-tested.
 
+**MVP plugin design (`PLUGIN_MVP.md`, 2026-06-26):** a deep multi-agent design workflow (13
+agents, Opus/xhigh) chose the productization path. Decision: ship a single **Max for Live MIDI
+device** (logic ported to v8 JavaScript) running the **follow-along comp** as the one MVP mode,
+with the **pure music-theory engine** (the honest "better than AMT" answer: aimlessness is a
+missing-structure problem a bigger model does not fix; neural flavor is a v2 hybrid sidecar).
+Wins: one unsigned `.amxd`, no signing/notarization, the feedback trap structurally gone, no
+virtual ports / routing. ~5-6 days. Riskiest bit: the ~270-LOC Python->JS port, neutralized by
+a Node golden-vector oracle (re-encode the follow + theory tests) BEFORE loading into Max.
+Runner-up if reuse/correctness matters more: a hybrid M4L shell + Python sidecar (ships
+follow.py verbatim). Full plan, milestones, and "not in the MVP" list in `PLUGIN_MVP.md`.
+
 ### M5 real-hardware results (2026-06-26, Intel x86_64 Mac, CPU)
 
 The AMT engine was run for real (M5.2 + the runnable half of M5.10): deps installed from
