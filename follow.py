@@ -83,6 +83,27 @@ def best_degree(ctx, tonic_pitch: int, hist: dict, current_degree: int, *,
     return best
 
 
+_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+
+def chord_name(ctx, tonic_pitch, degree, *, seventh=False) -> str:
+    """A readable name for the chord on a scale degree, e.g. 'C', 'Am', 'G7'."""
+    triad = build_triad(ctx, tonic_pitch, degree)
+    root, third, fifth = triad[0], triad[1], triad[2]
+    third_iv = (third - root) % 12
+    fifth_iv = (fifth - root) % 12
+    if third_iv == 4 and fifth_iv == 8:
+        quality = "aug"
+    elif third_iv == 3 and fifth_iv == 6:
+        quality = "dim"
+    elif third_iv == 3:
+        quality = "m"
+    else:
+        quality = ""  # major (or close enough)
+    name = _NOTE_NAMES[root % 12] + quality
+    return name + ("7" if seventh else "")
+
+
 def chord_bar_events(ctx, tonic_pitch, degree, *, style, vel, rng, beats=BEATS_PER_BAR,
                      seventh=False) -> list:
     """One bar of comp for a chosen chord as (onset_beat, dur, pitch, vel). Reuses build_triad."""
@@ -219,8 +240,11 @@ def main(argv=None) -> None:
 
             hist = pitch_histogram(rolling.recent(now, window_s=a.window_s + 0.5), now,
                                    window_s=a.window_s)
+            prev_degree = degree
             if hist:
                 degree = best_degree(cctx, ctonic, hist, degree)
+            if degree != prev_degree or bar == 0:
+                log.info("chord: %s", chord_name(cctx, ctonic, degree, seventh=a.seventh))
             events = chord_bar_events(cctx, ctonic, degree, style=a.style, vel=a.vel, rng=rng,
                                       beats=a.chord_beats, seventh=a.seventh)
             bar_start = base + bar * a.chord_beats * spb

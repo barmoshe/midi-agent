@@ -5,7 +5,16 @@ from __future__ import annotations
 import random
 
 from backing import make_context
-from follow import best_degree, chord_bar_events, pitch_histogram, score_chord
+from follow import best_degree, chord_bar_events, chord_name, pitch_histogram, score_chord
+
+
+def test_chord_name_reflects_quality():
+    ctx = make_context("C:major")
+    assert chord_name(ctx, 48, 1) == "C"     # I major
+    assert chord_name(ctx, 48, 6) == "Am"    # vi minor
+    assert chord_name(ctx, 48, 5) == "G"     # V major
+    assert chord_name(ctx, 48, 7) == "Bdim"  # vii diminished
+    assert chord_name(ctx, 48, 2, seventh=True) == "Dm7"
 
 
 def test_pitch_histogram_recent_weighted_and_drops_old():
