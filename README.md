@@ -1,6 +1,6 @@
 # Live MIDI Agent
 
-A live symbolic-MIDI musician with three modes:
+A live symbolic-MIDI musician with four modes:
 
 - **Turn-taking** (`agent.py`): you play a phrase, it detects your turn ended and answers
   with a musically-coherent reply, streamed back into your DAW as editable MIDI. Symbolic
@@ -10,6 +10,10 @@ A live symbolic-MIDI musician with three modes:
   velocities, so it keeps changing but always sounds like real accompaniment. Music-theory
   arranger, not a model: reliable, zero latency. It only plays (never listens), so no input
   routing and no feedback. This is the recommended backing mode. See "Backing-track mode".
+- **Follow-along comp** (`follow.py`): an AI accompanist that **navigates the chord changes by
+  listening to your solo**. It reads which pitches you emphasize, scores every diatonic chord
+  for fit (with voice-leading smoothing), and plays the best match under you - so the harmony
+  follows your playing instead of looping. Key is pinned or auto-detected. See "Follow-along".
 - **AI backing track** (`ai_backing.py`, experimental): the same idea driven by the local AMT
   model. Honest caveat: a raw symbolic-music model tends to produce aimless backing, so this is
   rougher than the arranger above - kept for experimentation.
@@ -23,7 +27,7 @@ sections 4.4-4.6, `plan.md` M5/M6).
 
 ## Status
 
-- Offline test suite: green (`pytest`, 65 tests, no hardware needed).
+- Offline test suite: green (`pytest`, 70 tests, no hardware needed).
 - Local AMT engine (M5): built and offline-verified (the model boundary is mocked); the real
   model load + a live latency pass are operator-side (see "Smart engine: local AMT").
 - Manual DAW round-trip: pending an operator run on a machine with a real MIDI stack
@@ -76,6 +80,32 @@ one progression instead of evolving), `--seed` (varies the evolution), `--vel`, 
 In your DAW: point one instrument track's MIDI input at **Agent Out** (Monitor In, an
 instrument loaded) to hear the backing, and play your solo on a separate track with your own
 sound. That's the whole setup. Ctrl-C stops it (all notes are released cleanly on exit).
+
+## Follow-along comp (the chords follow your solo)
+
+An AI accompanist that picks the chord changes by listening to what you play. It keeps a
+recency-weighted histogram of your recent notes, scores every diatonic chord for fit plus a
+voice-leading bias, and plays the best match (with hysteresis so it does not flip-flop) under
+your solo, bar by bar.
+
+```bash
+./venv/bin/python follow.py --key C:major --bpm 100
+./venv/bin/python follow.py --bpm 90 --chord-beats 2 --seventh   # auto-detect key, change faster, 7ths
+```
+
+Flags: `--key` (pin it, or omit to auto-detect from your first few seconds), `--bpm`, `--style
+pads|pulse`, `--chord-beats` (4 = a chord per bar; 2 = follows faster), `--window-s` (how much
+recent playing drives the choice), `--seventh`, `--vel`.
+
+Routing (it LISTENS and plays, so be careful - this is the one with a feedback trap):
+- Send your solo to **Agent In**: a track with **MIDI From = your controller** (NOT "All Ins" -
+  that includes Agent Out and creates a feedback loop), **Monitor In**, **MIDI To = Agent In**.
+- Hear the comp from **Agent Out**: a track with **MIDI From = Agent Out**, **Monitor In**, an
+  instrument loaded.
+- Hear your own solo: if your keyboard makes its own sound you already do; otherwise add a third
+  track (MIDI From = your controller, Monitor In, an instrument) for the solo voice.
+- Never route Agent Out back into Agent In. The agent also echo-guards its own notes as a safety
+  net, but correct routing is what matters.
 
 ## AI backing track (experimental, neural)
 

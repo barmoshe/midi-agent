@@ -5,7 +5,7 @@
 ## Where we are
 
 **M1-M4 PoC + the M5 local AMT engine + a rule-based backing-track mode + a dynamic AI backing
-mode are BUILT and the offline test suite is green** (65 passing `pytest` tests, no hardware).
+mode are BUILT and the offline test suite is green** (70 passing `pytest` tests, no hardware).
 The complete heuristic turn-taking agent ships: two virtual ports, lock-guarded capture with
 dangling-note closeout, the
 three-thread concurrency model, hybrid CC67 + silence-ladder handover, duration-weighted
@@ -43,6 +43,15 @@ to Agent Out, never listen (no input routing, no feedback), and you solo over th
   (drums/bass-only roles, beat quantization) to be usable. Device finding (Intel Mac with a Metal
   GPU): CPU ~3-9s per chunk; MPS sub-second warm but a ~36s first-call Metal compile, so it
   defaults to `--amt-device cpu`. Pure mapping (place_chunk) + the AmtStream wrapper unit-tested.
+
+**Follow-along comp (`follow.py`, added 2026-06-26):** an AI accompanist that navigates the
+chord changes by listening to the soloist. It keeps a recency-weighted pitch-class histogram of
+the incoming solo (on Agent In), scores every diatonic triad for fit plus a voice-leading bias,
+and plays the best match (with hysteresis to avoid flip-flopping) under the solo on Agent Out,
+bar by bar. Key is pinned (`--key`) or auto-detected (Krumhansl, locked once confident). Echo
+-guards its own comp notes so a stray thru does not make it chase itself. This is the genuinely
+reactive "AI" the operator wanted (analysis-driven harmony, not a hallucinating model). Pure
+logic (pitch_histogram / score_chord / best_degree / chord_bar_events) unit-tested.
 
 ### M5 real-hardware results (2026-06-26, Intel x86_64 Mac, CPU)
 
