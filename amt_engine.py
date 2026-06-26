@@ -216,6 +216,42 @@ class AmtResponder(Responder):
     # 1-2s post-handover prefill; deliberately left unimplemented.
 
 
+class AmtStream:
+    """Continuous AMT generation for a streaming, evolving accompaniment. Wraps the same
+    guarded model load as AmtResponder. `continue_from(history, length_s)` feeds the recent
+    history back into the model and returns the next `length_s` seconds of NEW notes, re-based
+    so the new material starts at 0. Reuses AmtResponder's encode/generate/decode seams, so it
+    is testable offline by injecting them (and raises ImportError without the deps)."""
+
+    def __init__(self, config, *, _deferred_load: bool = False) -> None:
+        self._amt = AmtResponder(config, _deferred_load=_deferred_load)
+        self.cfg = config
+
+    @property
+    def ready(self) -> bool:
+        return self._amt._model is not None
+
+    def continue_from(self, history, length_s: float) -> list:
+        hist = list(history)
+        h_end = max((n.end_s for n in hist), default=0.0)
+        events_in = self._amt._encode(tuple(hist)) if hist else []
+        events = self._amt._generate(
+            self._amt._model, start_time=h_end, end_time=h_end + length_s,
+            inputs=events_in, top_p=self.cfg.amt_top_p,
+        )
+        raw = self._amt._decode(events)
+        out = []
+        for n in raw:
+            if n.start_s < h_end - _WINDOW_EPS:  # keep only the newly generated tail
+                continue
+            s = max(0.0, n.start_s - h_end)
+            e = n.end_s - h_end
+            if e <= s:
+                e = s + MIN_DUR_S
+            out.append(NoteRecord(n.pitch, n.velocity, s, e, n.channel))
+        return out
+
+
 def _select_device(pref: str) -> str:
     """Resolve --amt-device: 'auto' picks cuda -> mps -> cpu; otherwise honor the literal."""
     if pref and pref != "auto":

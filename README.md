@@ -1,6 +1,6 @@
 # Live MIDI Agent
 
-A live symbolic-MIDI musician with two modes:
+A live symbolic-MIDI musician with three modes:
 
 - **Turn-taking** (`agent.py`): you play a phrase, it detects your turn ended and answers
   with a musically-coherent reply, streamed back into your DAW as editable MIDI. Symbolic
@@ -8,6 +8,9 @@ A live symbolic-MIDI musician with two modes:
 - **Backing track** (`backing.py`): a continuous, in-key chord + bass groove you solo over.
   It only plays (never listens), so there is no input routing and no feedback. See
   "Backing-track mode" below.
+- **AI backing track** (`ai_backing.py`): the dynamic version - starts with chords, then the
+  local AMT model takes over and keeps generating fresh, evolving material (snapped to your
+  key, capped under your lead). Falls back to the rule-based groove if the model is absent.
 
 The default is the **M1-M4 proof of concept**: the no-GPU, no-API-key **heuristic** engine
 (music-theory rules: transpose / mirror / arpeggiate / harmonize the human phrase, snapped
@@ -18,7 +21,7 @@ sections 4.4-4.6, `plan.md` M5/M6).
 
 ## Status
 
-- Offline test suite: green (`pytest`, 57 tests, no hardware needed).
+- Offline test suite: green (`pytest`, 62 tests, no hardware needed).
 - Local AMT engine (M5): built and offline-verified (the model boundary is mocked); the real
   model load + a live latency pass are operator-side (see "Smart engine: local AMT").
 - Manual DAW round-trip: pending an operator run on a machine with a real MIDI stack
@@ -68,6 +71,33 @@ In your DAW: point one instrument track's MIDI input at **Agent Out** (Monitor I
 instrument loaded) to hear the backing, and play your solo on a separate track with your own
 sound. That's the whole setup. Ctrl-C stops it (all notes are released cleanly on exit).
 
+## AI backing track (dynamic, evolving)
+
+The generative version of the backing track. It plays an instant in-key chord intro while the
+local AMT model warms up, then the model takes over and keeps generating new material, feeding
+its own recent output back in so the groove **evolves instead of looping**. Every note is
+snapped to your key and capped below a register so it stays under your solo; if the model
+isn't installed, or a generation falls behind, it covers the gap with the rule-based
+progression so the music never stops.
+
+```bash
+./venv/bin/pip install -r requirements-model.txt      # once, for the AI version
+./venv/bin/python ai_backing.py --key C:major --bpm 100
+```
+
+Flags: `--key`, `--bpm`, `--style`, `--progression`, `--register-cap` (default 72 = C5, keeps
+the AI under your lead), `--backing-vel`, `--chunk-secs` / `--history-secs` / `--lookahead-secs`
+(generation buffering), `--seed-cycles`, `--amt-device`, `--amt-top-p`. Routing is identical to
+the rule-based backing (one instrument track listening to Agent Out). The chord intro is
+instant; the AI material starts after the model's first generation (~several seconds on CPU).
+
+Pace + device note: defaults to `--amt-device cpu`, where each ~6s chunk generates in ~3-9s,
+so it can lag real time; the lookahead buffer plus rule-based covers keep it from going silent.
+A Metal GPU (`--amt-device mps`) is sub-second once warm but pays a ~30s+ Metal-compile on the
+FIRST generation of each run, so the AI takeover is delayed (covered by the chord intro
+meanwhile); cuda is fast throughout. If CPU feels gappy, raise `--lookahead-secs` /
+`--chunk-secs` or lower `--amt-top-p`.
+
 ## Run the tests
 
 ```bash
@@ -92,7 +122,9 @@ free, offline, and MIDI-native. The model deps are heavy and **not installed by 
 
 - **First run downloads the checkpoint** (~hundreds of MB) into the HuggingFace cache.
 - **Device** is auto-selected (`--amt-device auto` -> cuda > mps > cpu); override with
-  `--amt-device cpu|cuda|mps`.
+  `--amt-device cpu|cuda|mps`. Note: a Metal GPU (`mps`, including on Intel Macs with an AMD/
+  Iris GPU) is sub-second once warm but pays a ~30s+ kernel compile on the FIRST generation of
+  each run; `cpu` is slower (~3-9s) but has no such spike.
 - **Latency (measured):** on an Intel x86_64 Mac CPU, model load ~3s, then a 2-bar reply takes
   ~8-9s cold (first inference) and ~3-5s warm. Sub-1s on GPU / Apple Silicon. Keep responses
   short on CPU (`--amt-response-bars 2`, the default); lower it further for snappier turns.
