@@ -1,0 +1,6 @@
+# Live MIDI Agent - OPTIONAL local AMT engine (M5). NOT installed by default.
+# The recommended no-API-key "smart" engine: Anticipatory Music Transformer.
+# Floors only (these are large, fast-moving deps; the core never imports them).
+transformers>=4.40
+torch>=2.2
+anticipation>=0.0.1

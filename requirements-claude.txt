@@ -1,0 +1,3 @@
+# Live MIDI Agent - OPTIONAL Claude API engine (M6). NOT installed by default.
+# Best-quality engine for whoever accepts a cheap metered API key. Needs ANTHROPIC_API_KEY.
+anthropic>=0.40

@@ -1,0 +1,6 @@
+# Live MIDI Agent - core runtime (installed by default).
+# Exact-pinned: python-rtmidi is a compiled C extension (manylinux wheel), the most
+# likely ABI break across OSes, so pin it hard for reproducible builds.
+python-rtmidi==1.5.8
+mido==1.3.3
+pytest==8.3.4
