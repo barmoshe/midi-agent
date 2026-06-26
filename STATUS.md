@@ -27,6 +27,25 @@ pass (M5.2 / M5.10), and the manual DAW round-trip (this container is headless, 
 Relocated 2026-06-26 from the bar_builds monorepo (`lab/midi-agent`) into this standalone
 public repo (`github.com/barmoshe/midi-agent`).
 
+### M5 real-hardware results (2026-06-26, Intel x86_64 Mac, CPU)
+
+The AMT engine was run for real (M5.2 + the runnable half of M5.10): deps installed from
+`requirements-model.txt`, `stanford-crfm/music-medium-800k` loaded, and `scripts/amt_smoke.py`
+ran several `generate()` turns on a synthetic C-major phrase.
+
+- **Weights license confirmed `apache-2.0`** (HuggingFace card tag; no longer "believed"). Arch: gpt2.
+- **Latency (CPU):** model load ~3.0s (cached); generate ~8.8s cold (first inference) then
+  ~3-5s warm. Above the "hundreds of ms" turn-taking budget on this Intel-Mac CPU but within
+  the research's "~1-3s on a strong laptop CPU / sub-1s on GPU/Apple Silicon" expectation. The
+  default `--amt-timeout 10` accommodates it; lower `--amt-response-bars` for snappier turns.
+- **Quality:** every turn returned a non-empty, in-key (after scale-snap), t=0-anchored,
+  dangling-free reply that loops across turns. AMT is multi-instrument (Lakh), so replies span a
+  wide pitch range; for a tighter piano duet, a future option is to constrain the instrument.
+- **Platform pins (Intel Mac, torch capped at 2.2.2):** `transformers>=4.40,<4.46`, `numpy<2`,
+  `anticipation` from git (not on PyPI). All recorded in `requirements-model.txt` with the why.
+- The offline suite stays green with the deps installed (the deps-absent tests simulate the
+  missing import via monkeypatch, so they hold either way).
+
 Research, feasibility, AND technical design also complete (including the
 Claude-as-engine direction).
 
@@ -63,12 +82,11 @@ see README "Verify in a DAW"). Start `python agent.py`, confirm Agent In/Out app
 DAW, play a phrase, confirm an in-key reply records as editable MIDI, and that turn-taking
 loops. Report back and we close G1/G3/G4.
 
-**Operator: exercise the M5 AMT engine on real hardware** (M5.2 + M5.10): `pip install -r
-requirements-model.txt`, run `--responder amt`, confirm a model-composed in-key reply records
-as editable MIDI and loops; observe one real CPU `generate()`'s wall-clock latency and the
-loop behavior during it (best-effort timeout posture: the loop returns the heuristic at
-`--amt-timeout`; the abandoned generation finishes in the background). Record the observed
-latency here. Confirm the AMT *weights* license on HuggingFace before any paid build.
+**Operator: the AMT engine's last DAW step** (the only un-run part of M5.10). The engine is
+installed and verified headless (see M5 real-hardware results above); all that remains is
+hearing/recording it through a DAW: `./venv/bin/python agent.py --responder amt`, route Agent
+In to an instrument, play a phrase, and arm a track from Agent Out to capture the
+model-composed reply as editable MIDI. First reply will lag ~3-9s on CPU.
 
 The remaining build increment is **M6 = Claude API engine** (needs a metered key), the
 optional best-quality upgrade behind the same `Responder` seam.

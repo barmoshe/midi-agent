@@ -71,8 +71,13 @@ free, offline, and MIDI-native. The model deps are heavy and **not installed by 
 - **First run downloads the checkpoint** (~hundreds of MB) into the HuggingFace cache.
 - **Device** is auto-selected (`--amt-device auto` -> cuda > mps > cpu); override with
   `--amt-device cpu|cuda|mps`.
-- **Latency:** a few-bar reply is well under 1s on GPU / Apple Silicon, ~1-3s on a strong
-  laptop CPU. Keep responses short on CPU (`--amt-response-bars 2`, the default).
+- **Latency (measured):** on an Intel x86_64 Mac CPU, model load ~3s, then a 2-bar reply takes
+  ~8-9s cold (first inference) and ~3-5s warm. Sub-1s on GPU / Apple Silicon. Keep responses
+  short on CPU (`--amt-response-bars 2`, the default); lower it further for snappier turns.
+- **Platform note (Intel Mac):** PyTorch's last x86_64 macOS build is 2.2.2, which forces
+  `transformers>=4.40,<4.46` and `numpy<2` (newer transformers needs torch>=2.4/2.6). These
+  caps are in `requirements-model.txt`; lift them on Linux / Apple Silicon with a newer torch.
+  `anticipation` is not on PyPI and installs from its upstream git repo.
 - **Other flags:** `--amt-model`, `--amt-top-p` (0.98), `--amt-timeout` (seconds),
   `--amt-no-snap` (skip the in-key scale-snap of model output).
 - **Graceful fallback:** if the deps are missing, the model fails to load, or a generate
@@ -81,8 +86,9 @@ free, offline, and MIDI-native. The model deps are heavy and **not installed by 
 - **Timeout is best-effort:** on overrun the agent returns the heuristic reply rather than
   blocking, but the abandoned generation finishes in the background (Python cannot hard-kill
   it). A truly enforceable kill would need process isolation; documented, not implemented.
-- **License caveat:** the AMT *code* is Apache-2.0, but confirm the *weights* license on
-  HuggingFace before any paid/commercial use. Fine for personal/offline use and lab demos.
+- **License:** the AMT code is Apache-2.0 and the **weights are confirmed `apache-2.0`** (the
+  `stanford-crfm/music-medium-800k` model-card tag, checked 2026-06-26). Fine for commercial use;
+  re-verify on the model card if the checkpoint changes.
 
 ## Per-OS virtual MIDI ports
 

@@ -35,9 +35,13 @@ def test_no_timeout_behaves_as_passthrough(c_major_phrase, c_major_context):
     assert wrapped.respond(c_major_phrase, c_major_context) == primary.respond(c_major_phrase, c_major_context)
 
 
-def test_amt_factory_degrades_to_heuristic_without_deps(c_major_phrase, c_major_context, caplog):
-    # torch/anticipation are absent here -> AmtResponder construction raises -> build_responder
-    # must log a warning and return a heuristic-equivalent, never crash.
+def test_amt_factory_degrades_to_heuristic_without_deps(monkeypatch, c_major_phrase, c_major_context, caplog):
+    # When the model deps are absent, AmtResponder construction raises -> build_responder must
+    # log a warning and return a heuristic-equivalent, never crash. Simulate "deps absent" by
+    # blocking the transformers import so this holds regardless of what is installed.
+    import sys
+
+    monkeypatch.setitem(sys.modules, "transformers", None)
     with caplog.at_level(logging.WARNING):
         r = build_responder(Config(responder="amt"))
     assert any("AMT engine unavailable" in rec.message for rec in caplog.records)

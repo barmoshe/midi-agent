@@ -12,9 +12,14 @@ from capture import NoteRecord
 from config import Config
 
 
-def test_module_imports_but_construction_raises_without_deps():
-    # Importing the module must always work (no model deps at module level); constructing
-    # AmtResponder in this torch-free env must raise a catchable ImportError.
+def test_module_imports_but_construction_raises_without_deps(monkeypatch):
+    # Importing the module must always work (no model deps at module level). When the deps
+    # are absent, constructing AmtResponder must raise a catchable ImportError. We simulate
+    # "deps absent" by blocking the transformers import, so this holds whether or not the
+    # optional model deps happen to be installed in the venv.
+    import sys
+
+    monkeypatch.setitem(sys.modules, "transformers", None)
     assert amt_engine is not None
     with pytest.raises(ImportError):
         AmtResponder(Config())

@@ -1,6 +1,14 @@
 # Live MIDI Agent - OPTIONAL local AMT engine (M5). NOT installed by default.
 # The recommended no-API-key "smart" engine: Anticipatory Music Transformer.
-# Floors only (these are large, fast-moving deps; the core never imports them).
-transformers>=4.40
+# These are large, fast-moving deps; the core never imports them. The upper bounds below
+# are the verified-working set on an Intel (x86_64) Mac, where the last PyTorch build is
+# 2.2.2. Why the caps (all tied to torch being pinned at 2.2.2): transformers 5.x needs
+# torch>=2.4 (it silently disables torch otherwise); transformers >=4.49 refuses torch.load
+# of a .bin checkpoint unless torch>=2.6 (CVE-2025-32434), and this AMT checkpoint is a .bin
+# (no safetensors); torch 2.2.x is built against numpy 1.x. On Linux / Apple Silicon with a
+# newer torch you can lift all three caps.
+transformers>=4.40,<4.46
 torch>=2.2
-anticipation>=0.0.1
+numpy<2
+# anticipation is NOT on PyPI - install from the upstream repo (jthickstun/anticipation).
+anticipation @ git+https://github.com/jthickstun/anticipation.git
